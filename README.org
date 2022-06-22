@@ -1,0 +1,41 @@
+* Reproduce a bug with the Nix integration of Dhall
+
+** Description
+
+When in an environment where =http_proxy= and similar variables are
+needed for accessing the internet, derivations defined with
+=buildDhallUrl= cannot be built yet.  The proxy variables are not
+correctly passed to the environment the Nix builder is using.
+
+** Reproducing the error locally
+
+You need an environment where internet access is not possible without
+having configured the correct proxy settings.  This can be
+accomplished as follows using Docker (alternatively, a VM with a
+host-only network adapter should work as well).
+
+Start a proxy on the host system:
+
+#+begin_src shell
+nix run nixpkgs#tinyproxy -- -c proxy.conf
+#+end_src
+
+Create a Docker network named =hostonly= with the required settings:
+
+#+begin_src shell
+docker network create -d bridge --internal hostonly
+#+end_src
+
+Start a Nix Docker container mounting this repository at =/foo=; replace
+the IP with that of your host where the proxy is running:
+
+#+begin_src shell
+docker run -it --rm --network hostonly \
+       --mount source=$(pwd),target=/foo,type=bind \
+       -e http_proxy="192.168.56.1:8888" \
+       -e https_proxy="192.168.56.1:8888" \
+       nixpkgs/nix-flakes:latest
+#+end_src
+
+Then within the container you can execute the =nix build= that should
+now fail due to the GitHub URL not being reachable.
